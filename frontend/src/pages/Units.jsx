@@ -187,7 +187,9 @@ export default function Units() {
                     {unit.name}
                   </span>
                   <StatusBadge status={unit.type} />
-                  <StatusBadge status={unit.mode || 'independent'} />
+                  <span className="text-[11px] text-text-muted bg-elevated px-1.5 py-0.5 rounded">
+                    {unit.step_count || 0} step{(unit.step_count || 0) !== 1 ? 's' : ''}
+                  </span>
                   {!unit.enabled && (
                     <StatusBadge status="disabled" />
                   )}

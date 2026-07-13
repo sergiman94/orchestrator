@@ -23,6 +23,10 @@ AGENT_MODEL = os.getenv("AGENT_MODEL", "claude-sonnet-4-20250514")
 AGENT_MAX_TOKENS = int(os.getenv("AGENT_MAX_TOKENS", "4096"))
 AGENT_TEMPERATURE = float(os.getenv("AGENT_TEMPERATURE", "0.3"))
 
+# Groq (fast snippet generation)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
 # Memory (ChromaDB)
 CHROMADB_PATH = os.getenv("CHROMADB_PATH", "./data/chromadb")
 

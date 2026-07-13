@@ -79,19 +79,33 @@ class UnitOfWork(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, default="")
     type = Column(String(50), default="script")  # script, http_request, llm_call, transform, condition
-    script = Column(Text, default="")
     config = Column(JSON, default=dict)
-    timeout = Column(Integer, default=300)
     retry_policy = Column(JSON, default=dict)  # {max_retries, delay, backoff_multiplier}
     enabled = Column(Boolean, default=True)
     order = Column(Integer, default=0)
-    mode = Column(String(20), default="independent")  # independent, chained
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     workplace = relationship("Workplace", back_populates="units")
+    steps = relationship("Step", back_populates="unit", cascade="all, delete-orphan", order_by="Step.order")
     pipeline_steps = relationship("PipelineStep", back_populates="unit", cascade="all, delete-orphan")
     step_results = relationship("StepResult", back_populates="unit", cascade="all, delete-orphan")
+
+
+class Step(Base):
+    __tablename__ = "steps"
+
+    id = Column(String(36), primary_key=True, default=new_uuid)
+    unit_id = Column(String(36), ForeignKey("units_of_work.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    order = Column(Integer, default=0)
+    script = Column(Text, default="")
+    mode = Column(String(20), default="independent")  # independent, chained
+    timeout = Column(Integer, default=300)
+    created_at = Column(DateTime, default=utcnow)
+
+    unit = relationship("UnitOfWork", back_populates="steps")
+    step_results = relationship("StepResult", back_populates="step")
 
 
 class Pipeline(Base):
@@ -229,6 +243,7 @@ class StepResult(Base):
     id = Column(String(36), primary_key=True, default=new_uuid)
     execution_id = Column(String(36), ForeignKey("executions.id"), nullable=False)
     unit_id = Column(String(36), ForeignKey("units_of_work.id"), nullable=True)
+    step_id = Column(String(36), ForeignKey("steps.id"), nullable=True)
     status = Column(String(20), default="pending")  # pending, running, completed, failed, skipped
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
@@ -241,6 +256,7 @@ class StepResult(Base):
 
     execution = relationship("Execution", back_populates="step_results")
     unit = relationship("UnitOfWork", back_populates="step_results")
+    step = relationship("Step", back_populates="step_results")
 
 
 # ---------------------------------------------------------------------------

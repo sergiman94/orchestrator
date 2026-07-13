@@ -28,6 +28,8 @@ from backend.auth import (
 from backend.database import get_db, init_db, User, utcnow
 from backend.workplaces.router import router as workplaces_router
 from backend.units.router import router as units_router
+from backend.memory.router import router as memory_router
+from backend.agent.router import router as agent_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("orchestrator")
@@ -42,6 +44,13 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     init_db()
     logger.info("Database initialized.")
+    # Initialize ChromaDB memory store
+    from backend.memory.service import init_memory
+    try:
+        init_memory()
+        logger.info("ChromaDB memory initialized.")
+    except Exception as e:
+        logger.warning(f"ChromaDB initialization failed (non-fatal): {e}")
     yield
     logger.info("Shutting down.")
 
@@ -55,7 +64,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -118,6 +127,8 @@ def get_me(user: User = Depends(get_current_user)):
 
 app.include_router(workplaces_router)
 app.include_router(units_router)
+app.include_router(memory_router)
+app.include_router(agent_router)
 
 
 # ---------------------------------------------------------------------------
@@ -136,27 +147,25 @@ def health_check():
 _frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 if _frontend_dist.exists() and _frontend_dist.is_dir():
-    # Serve static assets from the frontend build
-    app.mount("/assets", StaticFiles(directory=str(_frontend_dist / "assets")), name="assets")
+    if (_frontend_dist / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=str(_frontend_dist / "assets")), name="assets")
 
-    @app.get("/{full_path:path}")
-    def serve_frontend(full_path: str):
-        """Serve the React SPA for any non-API route."""
-        # Skip API routes
-        if full_path.startswith("api/"):
-            raise HTTPException(status_code=404, detail="Not found")
+    @app.get("/")
+    def serve_index():
+        return FileResponse(str(_frontend_dist / "index.html"))
 
-        # Try to serve the exact file
-        file_path = _frontend_dist / full_path
-        if file_path.exists() and file_path.is_file():
-            return FileResponse(str(file_path))
+    # SPA routes — serve index.html for client-side routing
+    @app.get("/login")
+    def serve_login():
+        return FileResponse(str(_frontend_dist / "index.html"))
 
-        # Fall back to index.html for SPA routing
-        index_path = _frontend_dist / "index.html"
-        if index_path.exists():
-            return FileResponse(str(index_path))
+    @app.get("/workplaces/{rest:path}")
+    def serve_workplaces_sub(rest: str = ""):
+        return FileResponse(str(_frontend_dist / "index.html"))
 
-        raise HTTPException(status_code=404, detail="Not found")
+    @app.get("/workplaces")
+    def serve_workplaces():
+        return FileResponse(str(_frontend_dist / "index.html"))
 else:
     @app.get("/")
     def root():

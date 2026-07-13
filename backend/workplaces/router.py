@@ -13,7 +13,7 @@ from backend.database import get_db, User, Workplace, UnitOfWork, Execution, utc
 
 logger = logging.getLogger("orchestrator")
 
-router = APIRouter(prefix="/api/workplaces", tags=["workplaces"])
+router = APIRouter(prefix="/api/workplaces", tags=["workplaces"], redirect_slashes=False)
 
 
 # --- Schemas ---
@@ -83,7 +83,7 @@ def _serialize_workplace(wp: Workplace) -> dict:
 
 # --- Routes ---
 
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 def create_workplace(
     body: WorkplaceCreate,
     db: Session = Depends(get_db),
@@ -102,7 +102,7 @@ def create_workplace(
     return _serialize_workplace(workplace)
 
 
-@router.get("/")
+@router.get("")
 def list_workplaces(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),

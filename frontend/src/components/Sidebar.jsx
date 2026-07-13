@@ -45,8 +45,7 @@ const navItems = [
         <path d="M2 17.5A4.5 4.5 0 0 1 6.5 13h11a4.5 4.5 0 0 1 0 9h-11A4.5 4.5 0 0 1 2 17.5z" />
       </svg>
     ),
-    enabled: false,
-    comingSoon: true,
+    enabled: true,
   },
   {
     path: '/assets',
@@ -78,8 +77,7 @@ const navItems = [
         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
       </svg>
     ),
-    enabled: false,
-    comingSoon: true,
+    enabled: true,
   },
   {
     path: '/history',
@@ -89,8 +87,7 @@ const navItems = [
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
       </svg>
     ),
-    enabled: false,
-    comingSoon: true,
+    enabled: true,
   },
 ];
 
