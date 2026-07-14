@@ -220,7 +220,7 @@ export default function Units() {
                 {openMenu === unit.id && (
                   <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-[0_8px_30px_rgba(0,0,0,0.4)] z-50 py-1 min-w-[140px]">
                     <button
-                      onClick={() => { setOpenMenu(null); navigate(`/workplaces/${workplaceId}/units/${unit.id}`); }}
+                      onClick={() => { setOpenMenu(null); navigate(`/workplaces/${workplaceId}/units/${unit.id}/edit`); }}
                       className="w-full px-3 py-2 text-left text-[13px] text-text-secondary hover:bg-elevated hover:text-text-primary transition-colors bg-transparent border-none cursor-pointer"
                     >
                       Edit

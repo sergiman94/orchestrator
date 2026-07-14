@@ -8,6 +8,7 @@ import Workplaces from './pages/Workplaces';
 import WorkplaceDashboard from './pages/WorkplaceDashboard';
 import Units from './pages/Units';
 import UnitEditor from './pages/UnitEditor';
+import UnitDetail from './pages/UnitDetail';
 import AgentPanel from './pages/AgentPanel';
 import MemoryBrowser from './pages/MemoryBrowser';
 import ExecutionHistory from './pages/ExecutionHistory';
@@ -73,7 +74,8 @@ export default function App() {
         <Route index element={<WorkplaceDashboard />} />
         <Route path="units" element={<Units />} />
         <Route path="units/new" element={<UnitEditor />} />
-        <Route path="units/:unitId" element={<UnitEditor />} />
+        <Route path="units/:unitId" element={<UnitDetail />} />
+        <Route path="units/:unitId/edit" element={<UnitEditor />} />
         <Route path="agent" element={<AgentPanel />} />
         <Route path="memory" element={<MemoryBrowser />} />
         <Route path="history" element={<ExecutionHistory />} />
