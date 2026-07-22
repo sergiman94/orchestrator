@@ -100,6 +100,7 @@ class Step(Base):
     name = Column(String(255), nullable=False)
     order = Column(Integer, default=0)
     script = Column(Text, default="")
+    type = Column(String(50), default="script")  # script, connector, http_request, llm_call, condition
     mode = Column(String(20), default="independent")  # independent, chained
     timeout = Column(Integer, default=300)
     created_at = Column(DateTime, default=utcnow)

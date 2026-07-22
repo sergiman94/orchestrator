@@ -19,7 +19,7 @@ from backend.database import (
     StepResult,
     utcnow,
 )
-from backend.executor import run_script
+from backend.units.step_runner import run_step
 
 logger = logging.getLogger("orchestrator")
 
@@ -256,12 +256,7 @@ def _execute_unit_steps(
                 db.commit()
                 continue
 
-            result = run_script(
-                script=step.script,
-                input_data=step_input,
-                timeout=step.timeout or 300,
-                env_vars=env_vars,
-            )
+            result = run_step(step, input_data=step_input, env_vars=env_vars)
 
             finished = utcnow()
             step_result.status = "completed" if result.success else "failed"
