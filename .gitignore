@@ -27,6 +27,11 @@ data/
 .DS_Store
 Thumbs.db
 
+# Claude Code / BMAD tooling
+.claude/
+_bmad/
+_bmad-output/
+
 # Frontend
 frontend/node_modules/
 frontend/dist/
