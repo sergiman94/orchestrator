@@ -10,25 +10,25 @@ def build_system_prompt(workplace: dict) -> str:
     wp_name = workplace.get("name", "Unnamed Workplace")
     wp_desc = workplace.get("description", "")
 
-    return f"""You are an AI operational supervisor for the workplace "{wp_name}".
+    return f"""You are the AI assistant for the workspace "{wp_name}".
+{f'This workspace is about: {wp_desc}' if wp_desc else ''}
 
-Workplace description: {wp_desc or 'No description provided.'}
+You are helpful, conversational, and knowledgeable. When users talk to you, respond naturally like a smart colleague — not like a robotic system.
 
-Your role:
-1. MONITOR pipeline execution and detect issues proactively.
-2. DIAGNOSE failures by analyzing error messages, checking memory for similar past issues, and identifying root causes.
-3. DECIDE on the best course of action: retry with modifications, skip and continue, or escalate to the user.
-4. LEARN from outcomes by storing observations and patterns in memory for future reference.
+Your capabilities:
+- You can answer questions about the workspace, its units, and execution history
+- You can run units, retry failed ones, and check on what's happening
+- You have a shared memory of everything that has happened in this workspace — past executions, failures, patterns, and notes
+- When something fails, you can diagnose it by checking memory for similar past issues
 
-Guidelines:
-- Always check memory for similar past failures before deciding on an action.
-- When retrying, consider if the same approach will fail again. Modify parameters if needed.
-- Escalate to the user (alert_user) when you are uncertain or the issue requires human judgment.
-- Store important observations and patterns in memory so you can reference them later.
-- Be concise in your reasoning but thorough in your analysis.
-- When you encounter repeated failures, look for systemic issues rather than retrying blindly.
+How to behave:
+- For casual messages (greetings, questions), just respond conversationally. Don't use tools unless they're needed.
+- For operational questions ("why did X fail?", "what happened yesterday?"), query memory and execution history to give informed answers.
+- For action requests ("run the scraper", "retry that job"), use the appropriate tools.
+- When a pipeline failure triggers you automatically, analyze the error, check memory for patterns, and decide whether to retry or alert the user.
+- Only store observations in memory when something genuinely noteworthy happens — don't log greetings or trivial interactions.
 
-You have access to tools that let you execute units, retry failed executions, search and store memory, view execution history, and alert the user. Use them as needed to fulfill your supervisory role."""
+Keep your responses concise and direct. You're a helpful assistant, not a report generator."""
 
 
 def build_context_prompt(
@@ -93,13 +93,21 @@ def build_context_prompt(
     else:
         sections.append("## Recent Executions\nNo recent executions found.")
 
-    # Section 4: Instructions
-    sections.append(
-        "## Your Task\n"
-        "Analyze the current event in the context of the relevant history and recent executions. "
-        "Decide on the appropriate action and use your tools to carry it out. "
-        "After taking action, store any important observations in memory."
-    )
+    # Section 4: Instructions (only for non-chat triggers)
+    event_type = trigger_event.get("type", "")
+    if event_type == "user.request":
+        sections.append(
+            "## Instructions\n"
+            "Respond to the user's message naturally. Use tools only if the user is asking "
+            "for information you need to look up or actions you need to take. "
+            "For simple conversation, just reply directly without using any tools."
+        )
+    else:
+        sections.append(
+            "## Your Task\n"
+            "Analyze the current event in context. Decide on the appropriate action "
+            "and use your tools if needed. Store important observations in memory."
+        )
 
     return "\n\n".join(sections)
 

@@ -159,37 +159,53 @@ def invoke_agent(
     final_response = ""
 
     try:
+        used_tools = False
+
         for iteration in range(MAX_TOOL_ITERATIONS):
             iterations = iteration + 1
+
+            # On first call, include tools. After tool execution, don't include tools
+            # so Groq generates a text response instead of empty content.
+            include_tools = not used_tools
 
             response_data = _call_groq(
                 messages=messages,
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                tools=TOOL_DEFINITIONS,
+                tools=TOOL_DEFINITIONS if include_tools else None,
             )
 
             if not response_data:
-                final_response = "Failed to get response from Groq API."
+                if used_tools and actions_taken:
+                    # We already got tool results — summarize what happened
+                    final_response = "I checked the available information. " + "; ".join(
+                        f"Called {a['tool']}: {a['result'][:200]}" for a in actions_taken
+                    )
+                else:
+                    final_response = "Failed to get response from the AI agent."
                 break
 
             choice = response_data.get("choices", [{}])[0]
             message = choice.get("message", {})
             finish_reason = choice.get("finish_reason", "stop")
 
-            # Add assistant message to history
-            messages.append(message)
-
             # Check for tool calls
             tool_calls = message.get("tool_calls")
+            content = message.get("content")
 
             if not tool_calls or finish_reason == "stop":
                 # No tool calls — agent is done
-                final_response = message.get("content", "") or ""
+                final_response = content or ""
                 break
 
-            # 6. Execute tool calls
+            # Add assistant message to history
+            assistant_msg = {"role": "assistant", "tool_calls": tool_calls}
+            if content:
+                assistant_msg["content"] = content
+            messages.append(assistant_msg)
+
+            # 6. Execute tool calls and add results
             for tc in tool_calls:
                 func = tc.get("function", {})
                 tool_name = func.get("name", "")
@@ -212,15 +228,17 @@ def invoke_agent(
                 actions_taken.append({
                     "tool": tool_name,
                     "arguments": tool_args,
-                    "result": result[:500],  # Truncate for storage
+                    "result": result[:500],
                 })
 
                 # Add tool result to messages
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call_id,
-                    "content": result,
+                    "content": str(result),
                 })
+
+            used_tools = True
 
         # 7. Store agent decision in memory
         if actions_taken:
@@ -311,8 +329,9 @@ def _call_groq(
         response.raise_for_status()
         return response.json()
     except httpx.HTTPStatusError as e:
-        logger.error(f"Groq API HTTP error {e.response.status_code}: {e.response.text[:500]}")
+        logger.error(f"Groq API HTTP error {e.response.status_code}: {e.response.text[:2000]}")
+        logger.error(f"Groq request body (messages count: {len(messages)}): {json.dumps([{k: str(v)[:200] for k,v in m.items()} for m in messages[-3:]])}")
         return None
     except Exception as e:
-        logger.error(f"Groq API request failed: {e}")
+        logger.exception(f"Groq API request failed: {e}")
         return None

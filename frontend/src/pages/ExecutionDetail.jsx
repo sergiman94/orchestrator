@@ -5,6 +5,7 @@ import { useToast } from '../hooks/useToast';
 import { usePolling } from '../hooks/usePolling';
 import { formatRelativeTime, formatDateTime, formatDuration } from '../utils/formatters';
 import StatusBadge from '../components/StatusBadge';
+import InlineAgentChat from '../components/InlineAgentChat';
 
 function StatusBanner({ status }) {
   const styles = {
@@ -179,6 +180,18 @@ export default function ExecutionDetail() {
             </pre>
           </div>
         )}
+
+        {execution.status === 'failed' && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <InlineAgentChat
+              workplaceId={workplaceId}
+              context={`Unit "${execution.unit_name}" failed. ${execution.error || ''} ${
+                stepResults.filter(s => s.status === 'failed').map(s => `Step "${s.step_name}" error: ${s.stderr}`).join('. ')
+              }`}
+              placeholder="Ask AI: Why did this execution fail?"
+            />
+          </div>
+        )}
       </div>
 
       {/* Agent Decision Card */}
@@ -311,6 +324,14 @@ export default function ExecutionDetail() {
 
                         {!result.stdout && !result.stderr && !result.return_value && (
                           <p className="text-[12px] text-text-muted py-2">No output recorded for this step.</p>
+                        )}
+
+                        {result.status === 'failed' && (
+                          <InlineAgentChat
+                            workplaceId={workplaceId}
+                            context={`Step "${result.step_name}" in unit "${execution.unit_name}" failed.\nStderr: ${result.stderr || 'No error output'}\nStdout: ${result.stdout || 'No output'}`}
+                            placeholder={`Ask AI about "${result.step_name}" failure...`}
+                          />
                         )}
                       </div>
                     </div>

@@ -8,6 +8,7 @@ import { formatRelativeTime, formatDateTime, formatDuration } from '../utils/for
 import StatusBadge from '../components/StatusBadge';
 import StatsBar from '../components/StatsBar';
 import EmptyState from '../components/EmptyState';
+import InlineAgentChat from '../components/InlineAgentChat';
 
 export default function UnitDetail() {
   const { id: workplaceId, unitId } = useParams();
@@ -179,6 +180,13 @@ export default function UnitDetail() {
             <div className="text-xs text-text-muted mt-2">
               Duration: {formatDuration(lastExec.started_at, lastExec.finished_at)} · {formatDateTime(lastExec.started_at)}
             </div>
+          )}
+          {lastExec.status === 'failed' && (
+            <InlineAgentChat
+              workplaceId={workplaceId}
+              context={`Unit "${unit.name}" last execution failed.`}
+              placeholder="Ask AI: Why did this fail?"
+            />
           )}
         </div>
       )}
