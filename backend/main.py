@@ -31,6 +31,7 @@ from backend.units.router import router as units_router
 from backend.memory.router import router as memory_router
 from backend.agent.router import router as agent_router
 from backend.executions.router import wp_router as executions_wp_router, detail_router as executions_detail_router
+from backend.connectors.router import router as connectors_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("orchestrator")
@@ -132,6 +133,7 @@ app.include_router(memory_router)
 app.include_router(agent_router)
 app.include_router(executions_wp_router)
 app.include_router(executions_detail_router)
+app.include_router(connectors_router)
 
 
 # ---------------------------------------------------------------------------

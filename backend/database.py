@@ -69,6 +69,7 @@ class Workplace(Base):
     memory_entries = relationship("MemoryEntry", back_populates="workplace", cascade="all, delete-orphan")
     events = relationship("Event", back_populates="workplace", cascade="all, delete-orphan")
     executions = relationship("Execution", back_populates="workplace", cascade="all, delete-orphan")
+    connectors = relationship("Connector", back_populates="workplace", cascade="all, delete-orphan")
 
 
 class UnitOfWork(Base):
@@ -170,6 +171,22 @@ class Asset(Base):
     created_at = Column(DateTime, default=utcnow)
 
     workplace = relationship("Workplace", back_populates="assets")
+
+
+class Connector(Base):
+    __tablename__ = "connectors"
+
+    id = Column(String(36), primary_key=True, default=new_uuid)
+    workplace_id = Column(String(36), ForeignKey("workplaces.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    type = Column(String(50), nullable=False)  # s3, postgresql, http_rest
+    config = Column(JSON, default=dict)
+    credentials = Column(Text, default="")  # Fernet-encrypted via utils/crypto.py
+    health_status = Column(String(20), default="unknown")  # healthy, degraded, unreachable, unknown
+    last_checked = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+    workplace = relationship("Workplace", back_populates="connectors")
 
 
 class Channel(Base):
