@@ -248,15 +248,16 @@ def _execute_unit_steps(
             db.commit()
             db.refresh(step_result)
 
-            # Execute
-            if not step.script or not step.script.strip():
+            # Execute — skip only script-type steps with no script
+            step_type = step.type or "script"
+            if step_type == "script" and (not step.script or not step.script.strip()):
                 step_result.status = "skipped"
                 step_result.finished_at = utcnow()
                 step_result.stderr = "Step has no script"
                 db.commit()
                 continue
 
-            result = run_step(step, input_data=step_input, env_vars=env_vars)
+            result = run_step(step, input_data=step_input, env_vars=env_vars, db=db)
 
             finished = utcnow()
             step_result.status = "completed" if result.success else "failed"

@@ -3,12 +3,15 @@
 Handles credential encryption, health checks, serialization, and event emission.
 """
 
+import json
 import logging
+import time
 from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from backend.database import Connector, new_uuid
+from backend.executor import ExecutionResult, ExecutionMetrics
 from backend.utils.crypto import encrypt, decrypt
 from backend.events.emit import emit_event
 from backend.connectors.registry import get_connector
@@ -139,3 +142,74 @@ def check_health(db: Session, connector: Connector) -> dict:
         "health_status": connector.health_status,
         "last_checked": connector.last_checked.isoformat(),
     }
+
+
+def execute_step(db: Session, connector_id: str, params: dict) -> ExecutionResult:
+    """Execute a connector step (AD-15: step_runner routes through service, not registry).
+
+    Decrypts credentials, dispatches to provider, converts ConnectorResult to ExecutionResult.
+    Emits connector.failed event on error.
+    """
+    connector = db.query(Connector).filter(Connector.id == connector_id).first()
+    if not connector:
+        return ExecutionResult(
+            stdout="",
+            stderr=f"Connector '{connector_id}' not found",
+            return_value="",
+            success=False,
+            metrics=ExecutionMetrics(),
+        )
+
+    provider = get_connector(connector.type)
+    if provider is None:
+        return ExecutionResult(
+            stdout="",
+            stderr=f"No provider registered for connector type '{connector.type}'",
+            return_value="",
+            success=False,
+            metrics=ExecutionMetrics(),
+        )
+
+    # Build config with decrypted credentials
+    config = dict(connector.config or {})
+    if connector.credentials:
+        decrypted_creds = decrypt(connector.credentials)
+        if decrypted_creds:
+            config["_credentials"] = decrypted_creds
+
+    start_time = time.time()
+    try:
+        result = provider.execute(config, params or {})
+        wall_time = time.time() - start_time
+
+        # Convert ConnectorResult to JSON string for chaining
+        return_value = json.dumps(result.data) if result.data is not None else ""
+
+        return ExecutionResult(
+            stdout=f"Connector '{connector.name}' ({connector.type}): {result.record_count} records",
+            stderr="",
+            return_value=return_value,
+            success=True,
+            metrics=ExecutionMetrics(wall_time_seconds=round(wall_time, 3)),
+        )
+    except Exception as e:
+        wall_time = time.time() - start_time
+        error_msg = f"Connector '{connector.name}' ({connector.type}) failed: {str(e)}"
+        logger.warning(error_msg)
+
+        emit_event(
+            db,
+            workplace_id=connector.workplace_id,
+            type="connector.failed",
+            source_type="connector",
+            source_id=connector.id,
+            payload={"error": str(e), "params": params},
+        )
+
+        return ExecutionResult(
+            stdout="",
+            stderr=error_msg,
+            return_value="",
+            success=False,
+            metrics=ExecutionMetrics(wall_time_seconds=round(wall_time, 3)),
+        )
