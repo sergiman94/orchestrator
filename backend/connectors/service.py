@@ -15,6 +15,7 @@ from backend.executor import ExecutionResult, ExecutionMetrics
 from backend.utils.crypto import encrypt, decrypt
 from backend.events.emit import emit_event
 from backend.connectors.registry import get_connector
+from backend.memory.ingestion import ingest_connector_interaction
 
 logger = logging.getLogger("orchestrator")
 
@@ -185,6 +186,18 @@ def execute_step(db: Session, connector_id: str, params: dict) -> ExecutionResul
         # Convert ConnectorResult to JSON string for chaining
         return_value = json.dumps(result.data) if result.data is not None else ""
 
+        # Fire-and-forget memory ingestion (AD-9)
+        ingest_connector_interaction(
+            workplace_id=connector.workplace_id,
+            connector_name=connector.name,
+            connector_type=connector.type,
+            connector_id=connector.id,
+            success=True,
+            record_count=result.record_count,
+            wall_time_seconds=round(wall_time, 3),
+            metadata_from_provider=result.metadata,
+        )
+
         return ExecutionResult(
             stdout=f"Connector '{connector.name}' ({connector.type}): {result.record_count} records",
             stderr="",
@@ -204,6 +217,17 @@ def execute_step(db: Session, connector_id: str, params: dict) -> ExecutionResul
             source_type="connector",
             source_id=connector.id,
             payload={"error": str(e), "params": params},
+        )
+
+        # Fire-and-forget memory ingestion for failures (AD-9)
+        ingest_connector_interaction(
+            workplace_id=connector.workplace_id,
+            connector_name=connector.name,
+            connector_type=connector.type,
+            connector_id=connector.id,
+            success=False,
+            wall_time_seconds=round(wall_time, 3),
+            error=str(e),
         )
 
         return ExecutionResult(
