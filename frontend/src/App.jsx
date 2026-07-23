@@ -13,6 +13,7 @@ import AgentPanel from './pages/AgentPanel';
 import MemoryBrowser from './pages/MemoryBrowser';
 import ExecutionHistory from './pages/ExecutionHistory';
 import ExecutionDetail from './pages/ExecutionDetail';
+import ConnectorList from './pages/ConnectorList';
 
 function ProtectedRoute({ children }) {
   const { token, loading } = useAuth();
@@ -76,6 +77,7 @@ export default function App() {
         <Route path="units/new" element={<UnitEditor />} />
         <Route path="units/:unitId" element={<UnitDetail />} />
         <Route path="units/:unitId/edit" element={<UnitEditor />} />
+        <Route path="connectors" element={<ConnectorList />} />
         <Route path="agent" element={<AgentPanel />} />
         <Route path="memory" element={<MemoryBrowser />} />
         <Route path="history" element={<ExecutionHistory />} />
