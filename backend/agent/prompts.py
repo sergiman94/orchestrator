@@ -36,6 +36,7 @@ def build_context_prompt(
     trigger_event: dict,
     memory_results: list[dict],
     recent_history: list[dict],
+    asset_health: list[dict] = None,
 ) -> str:
     """Assemble the full context message for the agent.
 
@@ -93,7 +94,17 @@ def build_context_prompt(
     else:
         sections.append("## Recent Executions\nNo recent executions found.")
 
-    # Section 4: Instructions (only for non-chat triggers)
+    # Section 4: Asset health summary
+    if asset_health:
+        health_lines = []
+        for a in asset_health:
+            status = a.get("health_status", "unknown")
+            marker = "" if status == "healthy" else " ⚠️" if status == "degraded" else " 🔴" if status == "unreachable" else ""
+            checked = a.get("last_checked", "never")
+            health_lines.append(f"- {a.get('name', '?')} ({a.get('type', '?')}): {status}{marker} (checked: {checked})")
+        sections.append("## Infrastructure Health\n" + "\n".join(health_lines))
+
+    # Section 5: Instructions (only for non-chat triggers)
     event_type = trigger_event.get("type", "")
     if event_type == "user.request":
         sections.append(

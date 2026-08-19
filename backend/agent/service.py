@@ -135,7 +135,19 @@ def invoke_agent(
     if query_text:
         memory_results = query_memory(workplace_id, query_text, top_k=5)
 
-    # 4. Build system prompt + context
+    # 4. Load asset health for context
+    from backend.database import Asset
+    assets = db.query(Asset).filter(Asset.workplace_id == workplace_id).all()
+    asset_health = []
+    for a in assets:
+        asset_health.append({
+            "name": a.name,
+            "type": a.type,
+            "health_status": a.health_status,
+            "last_checked": a.last_checked.isoformat() if a.last_checked else "never",
+        })
+
+    # 5. Build system prompt + context
     if custom_system_prompt:
         system_prompt = custom_system_prompt
     else:
@@ -146,6 +158,7 @@ def invoke_agent(
         trigger_event=trigger_event,
         memory_results=memory_results,
         recent_history=recent_history,
+        asset_health=asset_health if asset_health else None,
     )
 
     # 5. Call Groq API with tool definitions

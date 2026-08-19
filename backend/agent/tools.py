@@ -151,6 +151,23 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_asset",
+            "description": "Check the health of a registered asset (database, API, AWS service). Returns current status and details.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "asset_id": {
+                        "type": "string",
+                        "description": "The ID of the asset to check.",
+                    },
+                },
+                "required": ["asset_id"],
+            },
+        },
+    },
 ]
 
 
@@ -188,6 +205,8 @@ def execute_tool(
             return _tool_get_execution_history(workplace_id, arguments, db)
         elif tool_name == "alert_user":
             return _tool_alert_user(workplace_id, arguments, db)
+        elif tool_name == "check_asset":
+            return _tool_check_asset(workplace_id, arguments, db)
         else:
             return f"Error: Unknown tool '{tool_name}'"
     except Exception as e:
@@ -432,3 +451,24 @@ def _tool_alert_user(workplace_id: str, args: dict, db: Session) -> str:
     )
 
     return f"Alert created (severity: {severity}, event_id: {event.id}). User will be notified."
+
+
+def _tool_check_asset(workplace_id: str, args: dict, db: Session) -> str:
+    """Check health of an asset."""
+    from backend.database import Asset
+    from backend.assets.service import check_health
+
+    asset_id = args.get("asset_id", "")
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.workplace_id == workplace_id).first()
+    if not asset:
+        return f"Error: Asset '{asset_id}' not found in this workplace."
+
+    result = check_health(db, asset)
+    status = result.get("health_status", "unknown")
+    checked = result.get("last_checked", "unknown")
+    changed = result.get("changed", False)
+
+    response = f"Asset '{asset.name}' ({asset.type}): {status} (checked: {checked})"
+    if changed:
+        response += f" — STATUS CHANGED"
+    return response
