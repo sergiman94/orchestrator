@@ -168,6 +168,7 @@ class Asset(Base):
     credentials = Column(Text, default="")  # Fernet-encrypted
     health_status = Column(String(20), default="unknown")  # healthy, degraded, unreachable, unknown
     last_checked = Column(DateTime, nullable=True)
+    check_interval = Column(Integer, default=300)  # seconds between health checks (0 = disabled)
     created_at = Column(DateTime, default=utcnow)
 
     workplace = relationship("Workplace", back_populates="assets")

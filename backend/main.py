@@ -32,6 +32,7 @@ from backend.memory.router import router as memory_router
 from backend.agent.router import router as agent_router
 from backend.executions.router import wp_router as executions_wp_router, detail_router as executions_detail_router
 from backend.connectors.router import router as connectors_router
+from backend.assets.router import router as assets_router, init_scheduler, schedule_existing_assets
 import backend.connectors.providers  # noqa: F401 — auto-register built-in connector providers
 
 logging.basicConfig(level=logging.INFO)
@@ -54,7 +55,15 @@ async def lifespan(app: FastAPI):
         logger.info("ChromaDB memory initialized.")
     except Exception as e:
         logger.warning(f"ChromaDB initialization failed (non-fatal): {e}")
+    # Initialize APScheduler for asset health checks (AD-11)
+    from apscheduler.schedulers.background import BackgroundScheduler
+    scheduler = BackgroundScheduler()
+    init_scheduler(scheduler)
+    scheduler.start()
+    schedule_existing_assets()
+    logger.info("APScheduler started for asset health checks.")
     yield
+    scheduler.shutdown(wait=False)
     logger.info("Shutting down.")
 
 
@@ -135,6 +144,7 @@ app.include_router(agent_router)
 app.include_router(executions_wp_router)
 app.include_router(executions_detail_router)
 app.include_router(connectors_router)
+app.include_router(assets_router)
 
 
 # ---------------------------------------------------------------------------
