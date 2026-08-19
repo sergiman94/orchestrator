@@ -62,4 +62,56 @@ def run_step(
             )
         return connector_execute(db, connector_id, params)
 
+    if step_type == "llm_call":
+        return _run_llm_step(step, input_data)
+
     raise NotImplementedError(f"Step type '{step_type}' not yet implemented")
+
+
+def _run_llm_step(step, input_data: Optional[str] = None) -> ExecutionResult:
+    """Execute an LLM call step."""
+    import time
+    from backend.llm.client import call_llm
+    from backend.executor import ExecutionMetrics
+
+    config = step.config or {}
+    prompt_template = config.get("prompt_template", "")
+    model = config.get("model", None)
+    temperature = config.get("temperature", 0.3)
+    max_tokens = config.get("max_tokens", 4096)
+
+    if not prompt_template:
+        return ExecutionResult(
+            stdout="", stderr="LLM call step has no prompt_template in config",
+            return_value="", success=False, metrics=ExecutionMetrics(),
+        )
+
+    # Replace {{INPUT_DATA}} placeholder with previous step output
+    prompt = prompt_template.replace("{{INPUT_DATA}}", input_data or "")
+
+    start_time = time.time()
+    try:
+        response = call_llm(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        wall_time = time.time() - start_time
+
+        return ExecutionResult(
+            stdout=f"LLM response ({response.usage.get('total_tokens', 0)} tokens)",
+            stderr="",
+            return_value=response.content,
+            success=True,
+            metrics=ExecutionMetrics(wall_time_seconds=round(wall_time, 3)),
+        )
+    except Exception as e:
+        wall_time = time.time() - start_time
+        return ExecutionResult(
+            stdout="",
+            stderr=f"LLM call failed: {str(e)}",
+            return_value="",
+            success=False,
+            metrics=ExecutionMetrics(wall_time_seconds=round(wall_time, 3)),
+        )

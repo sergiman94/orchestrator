@@ -1,13 +1,12 @@
-"""AI Agent service using Groq API (OpenAI-compatible tool_use)."""
+"""AI Agent service — tool-use loop with provider-agnostic LLM calls."""
 
 import json
 import logging
 from typing import Optional
 
-import httpx
 from sqlalchemy.orm import Session
 
-from backend.config import GROQ_API_KEY, GROQ_MODEL, AGENT_TEMPERATURE, AGENT_MAX_TOKENS
+from backend.config import GROQ_MODEL, AGENT_TEMPERATURE, AGENT_MAX_TOKENS
 from backend.database import (
     Workplace,
     Agent,
@@ -20,10 +19,10 @@ from backend.agent.prompts import build_system_prompt, build_context_prompt
 from backend.agent.tools import TOOL_DEFINITIONS, execute_tool
 from backend.memory.service import query_memory
 from backend.memory.ingestion import ingest_agent_decision
+from backend.llm.client import call_llm
 
 logger = logging.getLogger("orchestrator")
 
-GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MAX_TOOL_ITERATIONS = 5
 
 
@@ -89,6 +88,11 @@ def invoke_agent(
     max_tokens = AGENT_MAX_TOKENS
     custom_system_prompt = None
 
+    # Safety defaults
+    max_tool_calls = 10
+    max_retries = 3
+    max_invocations_hour = 30
+
     if agent:
         if agent.model:
             model = agent.model
@@ -98,6 +102,36 @@ def invoke_agent(
             max_tokens = agent.max_tokens
         if agent.system_prompt:
             custom_system_prompt = agent.system_prompt
+        if agent.max_tool_calls_per_invocation is not None:
+            max_tool_calls = agent.max_tool_calls_per_invocation
+        if agent.max_retries_per_execution is not None:
+            max_retries = agent.max_retries_per_execution
+        if agent.max_invocations_per_hour is not None:
+            max_invocations_hour = agent.max_invocations_per_hour
+
+    # Safety: check hourly invocation rate (AD-6)
+    from datetime import datetime, timedelta
+    from backend.database import Event
+    from backend.events.emit import emit_event
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    recent_invocations = db.query(Event).filter(
+        Event.workplace_id == workplace_id,
+        Event.type == "agent.invoked",
+        Event.created_at >= one_hour_ago,
+    ).count()
+    if recent_invocations >= max_invocations_hour:
+        emit_event(db, workplace_id, "agent.safety_limit", "agent", "", {
+            "limit": "invocations_per_hour", "current": recent_invocations, "max": max_invocations_hour,
+        })
+        return {
+            "response": f"Agent rate limit exceeded ({recent_invocations}/{max_invocations_hour} invocations in the last hour).",
+            "actions_taken": [],
+            "iterations": 0,
+            "error": "safety_limit_exceeded",
+        }
+
+    # Emit agent.invoked event for rate tracking
+    emit_event(db, workplace_id, "agent.invoked", "agent", "", {"trigger": trigger_event.get("type", "")})
 
     # 2. Load recent execution history (last 5)
     recent_executions = (
@@ -170,6 +204,7 @@ def invoke_agent(
     actions_taken = []
     iterations = 0
     final_response = ""
+    tool_call_count = 0
 
     try:
         used_tools = False
@@ -181,31 +216,17 @@ def invoke_agent(
             # so Groq generates a text response instead of empty content.
             include_tools = not used_tools
 
-            response_data = _call_groq(
-                messages=messages,
+            llm_response = call_llm(
                 model=model,
+                messages=messages,
+                tools=TOOL_DEFINITIONS if include_tools else None,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                tools=TOOL_DEFINITIONS if include_tools else None,
             )
 
-            if not response_data:
-                if used_tools and actions_taken:
-                    # We already got tool results — summarize what happened
-                    final_response = "I checked the available information. " + "; ".join(
-                        f"Called {a['tool']}: {a['result'][:200]}" for a in actions_taken
-                    )
-                else:
-                    final_response = "Failed to get response from the AI agent."
-                break
-
-            choice = response_data.get("choices", [{}])[0]
-            message = choice.get("message", {})
-            finish_reason = choice.get("finish_reason", "stop")
-
-            # Check for tool calls
-            tool_calls = message.get("tool_calls")
-            content = message.get("content")
+            content = llm_response.content
+            tool_calls = llm_response.tool_calls
+            finish_reason = llm_response.finish_reason
 
             if not tool_calls or finish_reason == "stop":
                 # No tool calls — agent is done
@@ -230,6 +251,15 @@ def invoke_agent(
                 tool_call_id = tc.get("id", "")
 
                 logger.info(f"Agent calling tool: {tool_name}({tool_args})")
+
+                # Safety: check tool call limit (AD-6)
+                tool_call_count += 1
+                if tool_call_count > max_tool_calls:
+                    emit_event(db, workplace_id, "agent.safety_limit", "agent", "", {
+                        "limit": "tool_calls_per_invocation", "current": tool_call_count, "max": max_tool_calls,
+                    })
+                    final_response = f"Tool call limit reached ({max_tool_calls}). Stopping to prevent runaway automation."
+                    break
 
                 result = execute_tool(
                     tool_name=tool_name,
@@ -305,46 +335,4 @@ def chat_with_agent(
     return invoke_agent(workplace_id, trigger_event, db)
 
 
-def _call_groq(
-    messages: list[dict],
-    model: str,
-    temperature: float,
-    max_tokens: int,
-    tools: Optional[list[dict]] = None,
-) -> Optional[dict]:
-    """Call the Groq API.
-
-    Returns the response JSON dict, or None on failure.
-    """
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    body = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }
-
-    if tools:
-        body["tools"] = tools
-        body["tool_choice"] = "auto"
-
-    try:
-        response = httpx.post(
-            GROQ_API_URL,
-            headers=headers,
-            json=body,
-            timeout=60.0,
-        )
-        response.raise_for_status()
-        return response.json()
-    except httpx.HTTPStatusError as e:
-        logger.error(f"Groq API HTTP error {e.response.status_code}: {e.response.text[:2000]}")
-        logger.error(f"Groq request body (messages count: {len(messages)}): {json.dumps([{k: str(v)[:200] for k,v in m.items()} for m in messages[-3:]])}")
-        return None
-    except Exception as e:
-        logger.exception(f"Groq API request failed: {e}")
-        return None
+    # _call_groq removed — all LLM calls now go through backend.llm.client (AD-7)
