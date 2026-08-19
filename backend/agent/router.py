@@ -30,6 +30,10 @@ class AgentConfigUpdate(BaseModel):
     max_tokens: Optional[int] = None
     enabled: Optional[bool] = None
     name: Optional[str] = None
+    max_retries_per_execution: Optional[int] = None
+    max_tool_calls_per_invocation: Optional[int] = None
+    max_invocations_per_hour: Optional[int] = None
+    require_confirmation_for_destructive: Optional[bool] = None
 
 
 class AgentInvokeRequest(BaseModel):
@@ -66,6 +70,10 @@ def _serialize_agent(agent: Agent) -> dict:
         "temperature": agent.temperature if agent.temperature is not None else 0.3,
         "max_tokens": agent.max_tokens or 4096,
         "enabled": agent.enabled if agent.enabled is not None else True,
+        "max_retries_per_execution": agent.max_retries_per_execution if agent.max_retries_per_execution is not None else 3,
+        "max_tool_calls_per_invocation": agent.max_tool_calls_per_invocation if agent.max_tool_calls_per_invocation is not None else 10,
+        "max_invocations_per_hour": agent.max_invocations_per_hour if agent.max_invocations_per_hour is not None else 30,
+        "require_confirmation_for_destructive": agent.require_confirmation_for_destructive if agent.require_confirmation_for_destructive is not None else True,
         "created_at": agent.created_at.isoformat() if agent.created_at else "",
     }
 
@@ -214,6 +222,14 @@ def update_agent_config(
         agent.max_tokens = body.max_tokens
     if body.enabled is not None:
         agent.enabled = body.enabled
+    if body.max_retries_per_execution is not None:
+        agent.max_retries_per_execution = body.max_retries_per_execution
+    if body.max_tool_calls_per_invocation is not None:
+        agent.max_tool_calls_per_invocation = body.max_tool_calls_per_invocation
+    if body.max_invocations_per_hour is not None:
+        agent.max_invocations_per_hour = body.max_invocations_per_hour
+    if body.require_confirmation_for_destructive is not None:
+        agent.require_confirmation_for_destructive = body.require_confirmation_for_destructive
 
     db.commit()
     db.refresh(agent)
