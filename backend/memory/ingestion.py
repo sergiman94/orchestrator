@@ -91,6 +91,7 @@ def ingest_execution(
             source_type=source_type,
             source_id=execution_id,
             metadata=metadata,
+            ttl_days=90,  # execution logs expire after 90 days
         )
         logger.info(f"Ingested execution {execution_id} into memory as {memory_id}")
         return memory_id

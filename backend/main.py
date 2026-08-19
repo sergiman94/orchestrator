@@ -61,10 +61,32 @@ async def lifespan(app: FastAPI):
     init_scheduler(scheduler)
     scheduler.start()
     schedule_existing_assets()
-    logger.info("APScheduler started for asset health checks.")
+    # Schedule memory lifecycle jobs
+    from backend.memory.service import purge_expired_memories
+    scheduler.add_job(purge_expired_memories, "cron", hour=2, minute=0, id="memory_purge_daily")
+    scheduler.add_job(_run_compaction_all, "cron", day_of_week="sun", hour=3, minute=0, id="memory_compaction_weekly")
+    logger.info("APScheduler started (asset health checks, memory purge, memory compaction).")
     yield
     scheduler.shutdown(wait=False)
     logger.info("Shutting down.")
+
+
+def _run_compaction_all():
+    """Weekly job: compact memories for all workplaces."""
+    from backend.database import SessionLocal, Workplace
+    from backend.memory.service import compact_memories
+    db = SessionLocal()
+    try:
+        workplaces = db.query(Workplace).all()
+        for wp in workplaces:
+            try:
+                compact_memories(wp.id)
+            except Exception as e:
+                logger.warning(f"Compaction failed for workplace {wp.id}: {e}")
+    except Exception as e:
+        logger.error(f"Weekly compaction job failed: {e}")
+    finally:
+        db.close()
 
 
 app = FastAPI(title="Orchestrator", version="0.1.0", lifespan=lifespan)
