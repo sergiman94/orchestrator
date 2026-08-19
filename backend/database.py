@@ -152,6 +152,10 @@ class Agent(Base):
     temperature = Column(Float, default=0.3)
     max_tokens = Column(Integer, default=4096)
     enabled = Column(Boolean, default=True)
+    max_retries_per_execution = Column(Integer, default=3)
+    max_tool_calls_per_invocation = Column(Integer, default=10)
+    max_invocations_per_hour = Column(Integer, default=30)
+    require_confirmation_for_destructive = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utcnow)
 
     workplace = relationship("Workplace", back_populates="agents")
